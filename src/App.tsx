@@ -42,19 +42,26 @@ export default function App() {
       );
 
       try {
-        // Pollinations AI API (100% Free, No Key Required)
-        const seed = Math.floor(Math.random() * 1000000); // Random seed for unique images
+        // Perchance AI API Engine (100% Free, No Key Required)
+        // We generate a unique userKey and a random seed for unique images
+        const userKey = Math.random().toString(36).substring(2, 10);
+        const seed = Math.floor(Math.random() * 1000000000);
         const encodedPrompt = encodeURIComponent(currentResult.prompt);
-        const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&seed=${seed}&nologo=true`;
+        const url = `https://image-generation.perchance.org/api/generate?prompt=${encodedPrompt}&seed=${seed}&userKey=${userKey}`;
 
         // Fetch image and convert to Base64 to support ZIP downloads
         const response = await fetch(url);
         if (!response.ok) {
-           throw new Error('Server busy, please try again.');
+           throw new Error('Perchance API is temporarily unavailable.');
         }
 
         const blob = await response.blob();
         
+        // Ensure it's a valid image blob
+        if (!blob.type.startsWith('image/')) {
+          throw new Error('Failed to generate image data.');
+        }
+
         const base64data = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
@@ -122,10 +129,10 @@ export default function App() {
       <div className="max-w-5xl mx-auto px-4 py-12">
         <header className="mb-10 text-center">
           <h1 className="text-4xl font-bold tracking-tight text-neutral-900 mb-3">
-            Bulk AI Image Generator
+            Bulk AI Image Generator (Perchance Engine)
           </h1>
           <p className="text-neutral-500 max-w-2xl mx-auto">
-            Paste a list of prompts (one per line) to generate multiple images at once using Pollinations AI.
+            Paste a list of prompts (one per line) to generate multiple images at once using Perchance AI.
           </p>
         </header>
 
@@ -198,7 +205,7 @@ export default function App() {
                       </div>
                     )}
                     {result.status === 'error' && (
-                      <div className="text-red-500 flex flex-col items-center text-center">
+                    <div className="text-red-500 flex flex-col items-center text-center">
                         <AlertCircle className="h-8 w-8 mb-2" />
                         <span className="text-sm font-medium mb-1">Error</span>
                         <span className="text-xs text-red-400 line-clamp-3 px-2">
