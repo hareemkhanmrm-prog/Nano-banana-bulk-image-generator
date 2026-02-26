@@ -42,24 +42,24 @@ export default function App() {
       );
 
       try {
-        // Perchance AI API Engine (100% Free, No Key Required)
-        // We generate a unique userKey and a random seed for unique images
         const userKey = Math.random().toString(36).substring(2, 10);
         const seed = Math.floor(Math.random() * 1000000000);
         const encodedPrompt = encodeURIComponent(currentResult.prompt);
-        const url = `https://image-generation.perchance.org/api/generate?prompt=${encodedPrompt}&seed=${seed}&userKey=${userKey}`;
+        
+        // Using a CORS Proxy to fix the "Failed to fetch" error
+        const targetUrl = `https://image-generation.perchance.org/api/generate?prompt=${encodedPrompt}&seed=${seed}&userKey=${userKey}`;
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
 
-        // Fetch image and convert to Base64 to support ZIP downloads
-        const response = await fetch(url);
+        const response = await fetch(proxyUrl);
+        
         if (!response.ok) {
-           throw new Error('Perchance API is temporarily unavailable.');
+           throw new Error('API is currently busy. Please try again in a moment.');
         }
 
         const blob = await response.blob();
         
-        // Ensure it's a valid image blob
         if (!blob.type.startsWith('image/')) {
-          throw new Error('Failed to generate image data.');
+          throw new Error('Received invalid data instead of an image.');
         }
 
         const base64data = await new Promise<string>((resolve, reject) => {
@@ -80,7 +80,7 @@ export default function App() {
         setResults((prev) =>
           prev.map((r) =>
             r.id === currentResult.id
-              ? { ...r, status: 'error', error: error.message || 'Failed to generate image' }
+              ? { ...r, status: 'error', error: error.message || 'Connection error' }
               : r
           )
         );
@@ -117,7 +117,7 @@ export default function App() {
     const url = URL.createObjectURL(content);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'bulk_images.zip';
+    a.download = 'bulk_images_perchance.zip';
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -129,25 +129,22 @@ export default function App() {
       <div className="max-w-5xl mx-auto px-4 py-12">
         <header className="mb-10 text-center">
           <h1 className="text-4xl font-bold tracking-tight text-neutral-900 mb-3">
-            Bulk AI Image Generator (Perchance Engine)
+            Bulk AI Image Generator (Stable)
           </h1>
           <p className="text-neutral-500 max-w-2xl mx-auto">
-            Paste a list of prompts (one per line) to generate multiple images at once using Perchance AI.
+            Powered by Perchance AI engine. High-quality bulk image generation without limits.
           </p>
         </header>
 
         <div className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-6 mb-8">
-          <label
-            htmlFor="prompts"
-            className="block text-sm font-medium text-neutral-700 mb-2"
-          >
+          <label htmlFor="prompts" className="block text-sm font-medium text-neutral-700 mb-2">
             Image Prompts (One per line)
           </label>
           <textarea
             id="prompts"
             rows={8}
             className="w-full rounded-xl border-neutral-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-neutral-50 p-4 text-sm border resize-y"
-            placeholder="A futuristic city at sunset&#10;A cute cat wearing a spacesuit&#10;A minimalist logo for a coffee shop"
+            placeholder="A futuristic city at sunset&#10;A cute cat wearing a spacesuit"
             value={promptsText}
             onChange={(e) => setPromptsText(e.target.value)}
             disabled={isGenerating}
@@ -157,7 +154,7 @@ export default function App() {
             <button
               onClick={handleGenerate}
               disabled={isGenerating || !promptsText.trim()}
-              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             >
               {isGenerating ? (
                 <>
@@ -177,9 +174,7 @@ export default function App() {
         {results.length > 0 && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-semibold tracking-tight">
-                Generated Results
-              </h2>
+              <h2 className="text-2xl font-semibold tracking-tight">Results</h2>
               <span className="text-sm text-neutral-500 bg-neutral-200 px-3 py-1 rounded-full">
                 {successfulCount} / {results.length} Completed
               </span>
@@ -187,52 +182,28 @@ export default function App() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {results.map((result) => (
-                <div
-                  key={result.id}
-                  className="bg-white rounded-2xl shadow-sm border border-neutral-200 overflow-hidden flex flex-col"
-                >
+                <div key={result.id} className="bg-white rounded-2xl shadow-sm border border-neutral-200 overflow-hidden flex flex-col">
                   <div className="aspect-square bg-neutral-100 relative flex items-center justify-center p-4">
-                    {result.status === 'pending' && (
-                      <div className="text-neutral-400 flex flex-col items-center">
-                        <ImageIcon className="h-8 w-8 mb-2 opacity-50" />
-                        <span className="text-sm font-medium">Waiting...</span>
-                      </div>
-                    )}
-                    {result.status === 'generating' && (
-                      <div className="text-indigo-500 flex flex-col items-center">
-                        <Loader2 className="h-8 w-8 mb-2 animate-spin" />
-                        <span className="text-sm font-medium">Generating...</span>
-                      </div>
-                    )}
+                    {result.status === 'pending' && <span className="text-sm text-neutral-400">Waiting...</span>}
+                    {result.status === 'generating' && <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />}
                     {result.status === 'error' && (
-                    <div className="text-red-500 flex flex-col items-center text-center">
-                        <AlertCircle className="h-8 w-8 mb-2" />
-                        <span className="text-sm font-medium mb-1">Error</span>
-                        <span className="text-xs text-red-400 line-clamp-3 px-2">
-                          {result.error}
-                        </span>
+                      <div className="text-center p-2 text-red-500">
+                        <AlertCircle className="h-6 w-6 mx-auto mb-1" />
+                        <span className="text-xs font-medium">{result.error}</span>
                       </div>
                     )}
                     {result.status === 'success' && result.imageUrl && (
-                      <img
-                        src={result.imageUrl}
-                        alt={result.prompt}
-                        className="w-full h-full object-cover"
-                      />
+                      <img src={result.imageUrl} alt={result.prompt} className="w-full h-full object-cover" />
                     )}
                   </div>
-                  
                   <div className="p-4 flex flex-col flex-grow">
-                    <p className="text-sm text-neutral-700 line-clamp-2 mb-4 flex-grow" title={result.prompt}>
-                      {result.prompt}
-                    </p>
+                    <p className="text-sm text-neutral-700 line-clamp-2 mb-4 flex-grow">{result.prompt}</p>
                     <button
                       onClick={() => handleDownloadSingle(result)}
                       disabled={result.status !== 'success'}
-                      className="w-full inline-flex justify-center items-center px-4 py-2 border border-neutral-300 shadow-sm text-sm font-medium rounded-lg text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="w-full inline-flex justify-center items-center px-4 py-2 border border-neutral-300 shadow-sm text-sm font-medium rounded-lg hover:bg-neutral-50 disabled:opacity-50"
                     >
-                      <Download className="-ml-1 mr-2 h-4 w-4" />
-                      Download
+                      <Download className="-ml-1 mr-2 h-4 w-4" /> Download
                     </button>
                   </div>
                 </div>
@@ -243,10 +214,9 @@ export default function App() {
               <div className="mt-12 pt-8 border-t border-neutral-200 flex justify-center">
                 <button
                   onClick={handleDownloadZip}
-                  className="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-xl shadow-sm text-white bg-neutral-900 hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-900 transition-colors"
+                  className="inline-flex items-center px-8 py-4 text-white bg-neutral-900 rounded-xl hover:bg-neutral-800 transition-colors"
                 >
-                  <Archive className="-ml-1 mr-3 h-6 w-6" />
-                  Download All as ZIP
+                  <Archive className="-ml-1 mr-3 h-6 w-6" /> Download All as ZIP
                 </button>
               </div>
             )}
