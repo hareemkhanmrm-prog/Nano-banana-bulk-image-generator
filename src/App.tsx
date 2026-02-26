@@ -1,96 +1,66 @@
 import React, { useState } from 'react';
-import JSZip from 'jszip';
-import { Loader2, Download, ImageIcon, Archive, AlertCircle } from 'lucide-react';
-
-interface GenerationResult {
-  id: string;
-  prompt: string;
-  imageUrl?: string;
-  status: 'pending' | 'generating' | 'success' | 'error';
-  error?: string;
-}
 
 export default function App() {
   const [promptsText, setPromptsText] = useState('');
-  const [results, setResults] = useState<GenerationResult[]>([]);
+  const [images, setImages] = useState<{prompt: string, url: string}[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     const lines = promptsText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     if (lines.length === 0) return;
 
-    setResults(lines.map((p, i) => ({ id: `${Date.now()}-${i}`, prompt: p, status: 'pending' })));
     setIsGenerating(true);
+    const newImages = lines.map(prompt => {
+      const seed = Math.floor(Math.random() * 1000000);
+      return {
+        prompt,
+        url: `https://pollinations.ai/p/${encodeURIComponent(prompt)}?width=512&height=512&seed=${seed}&nologo=true`
+      };
+    });
 
-    for (let i = 0; i < lines.length; i++) {
-      const prompt = lines[i];
-      setResults(prev => prev.map(r => r.prompt === prompt ? { ...r, status: 'generating' } : r));
-
-      try {
-        const seed = Math.floor(Math.random() * 999999);
-        // Direct image URL for maximum compatibility
-        const directUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&seed=${seed}&nologo=true&model=turbo`;
-
-        // We use the image object to pre-load and verify it exists
-        const img = new Image();
-        img.src = directUrl;
-
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = () => reject(new Error("Network restricted"));
-          // Timeout after 20 seconds
-          setTimeout(() => reject(new Error("Timeout")), 20000);
-        });
-
-        setResults(prev => prev.map(r => r.prompt === prompt ? { ...r, status: 'success', imageUrl: directUrl } : r));
-      } catch (e) {
-        setResults(prev => prev.map(r => r.prompt === prompt ? { ...r, status: 'error', error: 'Connection Restricted' } : r));
-      }
-    }
-    setIsGenerating(false);
+    setImages(newImages);
+    // Humne delay rakha hai taake loading animation dikhayi de
+    setTimeout(() => setIsGenerating(false), 2000);
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white p-5 md:p-10 font-sans">
+    <div className="min-h-screen bg-slate-950 text-white p-10 font-sans">
       <div className="max-w-4xl mx-auto">
-        <header className="text-center mb-10">
-          <h1 className="text-4xl font-black bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent italic tracking-tighter">NANO BANANA GENERATOR</h1>
-          <p className="text-slate-500 text-[10px] tracking-[0.2em] mt-2 font-mono">STABLE PRODUCTION BUILD</p>
-        </header>
-
-        <div className="bg-[#0f172a] p-8 rounded-[2rem] border border-slate-800 shadow-2xl mb-12">
+        <h1 className="text-3xl font-black text-center mb-8 text-blue-500 uppercase">Nano Banana: Direct Render</h1>
+        
+        <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 mb-10">
           <textarea
-            className="w-full h-32 bg-[#020617] rounded-2xl p-5 text-white border border-slate-800 focus:border-blue-500 outline-none"
-            placeholder="Type prompts (one per line)..."
+            className="w-full h-32 bg-slate-950 rounded-2xl p-4 border border-slate-800 outline-none focus:border-blue-500"
+            placeholder="Enter prompts..."
             value={promptsText}
             onChange={(e) => setPromptsText(e.target.value)}
           />
           <button
             onClick={handleGenerate}
-            disabled={isGenerating || !promptsText.trim()}
-            className="w-full mt-6 bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black text-lg transition-all disabled:opacity-20 flex items-center justify-center shadow-lg shadow-blue-900/20"
+            disabled={isGenerating}
+            className="w-full mt-4 bg-blue-600 py-3 rounded-xl font-bold hover:bg-blue-500 disabled:opacity-30"
           >
-            {isGenerating ? <Loader2 className="animate-spin mr-2" /> : <ImageIcon className="mr-2" />}
-            GENERATE IMAGES
+            {isGenerating ? "Connecting to Engine..." : "GENERATE IMAGES"}
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {results.map((res) => (
-            <div key={res.id} className="bg-[#0f172a] rounded-3xl border border-slate-800 overflow-hidden">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {images.map((img, i) => (
+            <div key={i} className="bg-slate-900 rounded-3xl overflow-hidden border border-slate-800">
               <div className="aspect-square bg-black flex items-center justify-center">
-                {res.status === 'generating' && <Loader2 className="animate-spin text-blue-500 w-10 h-10" />}
-                {res.status === 'error' && <span className="text-[10px] text-red-500 font-bold uppercase">{res.error}</span>}
-                {res.status === 'success' && <img src={res.imageUrl} className="w-full h-full object-cover" alt="AI Result" />}
+                <img 
+                  src={img.url} 
+                  alt={img.prompt}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "https://via.placeholder.com/512?text=Network+Error+Check+VPN";
+                  }}
+                />
               </div>
-              <div className="p-4">
-                <button
-                  onClick={() => window.open(res.imageUrl, '_blank')}
-                  disabled={res.status !== 'success'}
-                  className="w-full bg-slate-800 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 disabled:opacity-10"
-                >
-                  View / Save
-                </button>
+              <div className="p-4 flex justify-between items-center">
+                <p className="text-[10px] text-slate-500 truncate w-2/3">{img.prompt}</p>
+                <a href={img.url} target="_blank" className="text-[10px] bg-slate-800 px-3 py-1 rounded-lg">Open Link</a>
               </div>
             </div>
           ))}
