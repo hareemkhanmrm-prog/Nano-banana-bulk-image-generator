@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { GoogleGenAI } from '@google/genai';
 import JSZip from 'jszip';
 import { Loader2, Download, Image as ImageIcon, Archive, AlertCircle } from 'lucide-react';
 
@@ -33,8 +32,6 @@ export default function App() {
     setResults(initialResults);
     setIsGenerating(true);
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
     for (let i = 0; i < initialResults.length; i++) {
       const currentResult = initialResults[i];
       
@@ -45,33 +42,33 @@ export default function App() {
       );
 
       try {
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash-image',
-          contents: {
-            parts: [{ text: currentResult.prompt }],
-          },
+        // Pollinations AI API (100% Free, No Key Required)
+        const seed = Math.floor(Math.random() * 1000000); // Random seed for unique images
+        const encodedPrompt = encodeURIComponent(currentResult.prompt);
+        const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&seed=${seed}&nologo=true`;
+
+        // Fetch image and convert to Base64 to support ZIP downloads
+        const response = await fetch(url);
+        if (!response.ok) {
+           throw new Error('Server busy, please try again.');
+        }
+
+        const blob = await response.blob();
+        
+        const base64data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
         });
 
-        let imageUrl = '';
-        for (const part of response.candidates?.[0]?.content?.parts || []) {
-          if (part.inlineData) {
-            const base64EncodeString = part.inlineData.data;
-            imageUrl = `data:image/png;base64,${base64EncodeString}`;
-            break;
-          }
-        }
-
-        if (imageUrl) {
-          setResults((prev) =>
-            prev.map((r) =>
-              r.id === currentResult.id
-                ? { ...r, status: 'success', imageUrl }
-                : r
-            )
-          );
-        } else {
-          throw new Error('No image data returned');
-        }
+        setResults((prev) =>
+          prev.map((r) =>
+            r.id === currentResult.id
+              ? { ...r, status: 'success', imageUrl: base64data }
+              : r
+          )
+        );
       } catch (error: any) {
         setResults((prev) =>
           prev.map((r) =>
@@ -128,7 +125,7 @@ export default function App() {
             Bulk AI Image Generator
           </h1>
           <p className="text-neutral-500 max-w-2xl mx-auto">
-            Paste a list of prompts (one per line) to generate multiple images at once using the Nano Banana model.
+            Paste a list of prompts (one per line) to generate multiple images at once using Pollinations AI.
           </p>
         </header>
 
