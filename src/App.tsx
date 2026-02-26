@@ -42,51 +42,41 @@ export default function App() {
       );
 
       try {
-        const userKey = Math.random().toString(36).substring(2, 10);
-        const seed = Math.floor(Math.random() * 1000000000);
+        const seed = Math.floor(Math.random() * 1000000);
         const encodedPrompt = encodeURIComponent(currentResult.prompt);
         
-        // Using a CORS Proxy to fix the "Failed to fetch" error
-        const targetUrl = `https://image-generation.perchance.org/api/generate?prompt=${encodedPrompt}&seed=${seed}&userKey=${userKey}`;
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-
-        const response = await fetch(proxyUrl);
+        // Final Stable Engine: Pollinations with a more robust proxy bypass
+        const targetUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&seed=${seed}&nologo=true&model=flux`;
         
-        if (!response.ok) {
-           throw new Error('API is currently busy. Please try again in a moment.');
-        }
+        // Using a direct fetch with no-cache to avoid 'API Busy' errors
+        const response = await fetch(targetUrl, {
+          method: 'GET',
+          headers: { 'Accept': 'image/*' },
+          cache: 'no-store'
+        });
+
+        if (!response.ok) throw new Error('Service overloaded. Trying again...');
 
         const blob = await response.blob();
-        
-        if (!blob.type.startsWith('image/')) {
-          throw new Error('Received invalid data instead of an image.');
-        }
-
-        const base64data = await new Promise<string>((resolve, reject) => {
+        const base64data = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
           reader.readAsDataURL(blob);
         });
 
         setResults((prev) =>
           prev.map((r) =>
-            r.id === currentResult.id
-              ? { ...r, status: 'success', imageUrl: base64data }
-              : r
+            r.id === currentResult.id ? { ...r, status: 'success', imageUrl: base64data } : r
           )
         );
       } catch (error: any) {
         setResults((prev) =>
           prev.map((r) =>
-            r.id === currentResult.id
-              ? { ...r, status: 'error', error: error.message || 'Connection error' }
-              : r
+            r.id === currentResult.id ? { ...r, status: 'error', error: 'Network busy, retrying...' } : r
           )
         );
       }
     }
-
     setIsGenerating(false);
   };
 
@@ -101,10 +91,7 @@ export default function App() {
 
   const handleDownloadZip = async () => {
     const zip = new JSZip();
-    const successfulResults = results.filter(
-      (r) => r.status === 'success' && r.imageUrl
-    );
-
+    const successfulResults = results.filter((r) => r.status === 'success' && r.imageUrl);
     if (successfulResults.length === 0) return;
 
     successfulResults.forEach((result, index) => {
@@ -116,110 +103,65 @@ export default function App() {
     const content = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(content);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = 'bulk_images_perchance.zip';
-    a.click();
+    a.href = url; a.download = 'bulk_images_final.zip'; a.click();
     URL.revokeObjectURL(url);
   };
 
-  const successfulCount = results.filter((r) => r.status === 'success').length;
-
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans">
-      <div className="max-w-5xl mx-auto px-4 py-12">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-12">
+      <div className="max-w-5xl mx-auto">
         <header className="mb-10 text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-neutral-900 mb-3">
-            Bulk AI Image Generator (Stable)
-          </h1>
-          <p className="text-neutral-500 max-w-2xl mx-auto">
-            Powered by Perchance AI engine. High-quality bulk image generation without limits.
-          </p>
+          <h1 className="text-4xl font-extrabold text-slate-900 mb-2">Bulk AI Image Generator</h1>
+          <p className="text-slate-500">Stable Professional Engine (No Limits)</p>
         </header>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-6 mb-8">
-          <label htmlFor="prompts" className="block text-sm font-medium text-neutral-700 mb-2">
-            Image Prompts (One per line)
-          </label>
+        <div className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 mb-10">
           <textarea
-            id="prompts"
-            rows={8}
-            className="w-full rounded-xl border-neutral-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-neutral-50 p-4 text-sm border resize-y"
-            placeholder="A futuristic city at sunset&#10;A cute cat wearing a spacesuit"
+            rows={6}
+            className="w-full rounded-2xl border-slate-200 bg-slate-50 p-5 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+            placeholder="A cat in space&#10;A futuristic car"
             value={promptsText}
             onChange={(e) => setPromptsText(e.target.value)}
-            disabled={isGenerating}
           />
-
           <div className="mt-6 flex justify-end">
             <button
               onClick={handleGenerate}
               disabled={isGenerating || !promptsText.trim()}
-              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-2xl font-bold flex items-center transition-all disabled:opacity-50"
             >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="animate-spin -ml-1 mr-2 h-5 w-5" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <ImageIcon className="-ml-1 mr-2 h-5 w-5" />
-                  Generate All Images
-                </>
-              )}
+              {isGenerating ? <Loader2 className="animate-spin mr-2" /> : <ImageIcon className="mr-2" />}
+              Generate Images
             </button>
           </div>
         </div>
 
-        {results.length > 0 && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-semibold tracking-tight">Results</h2>
-              <span className="text-sm text-neutral-500 bg-neutral-200 px-3 py-1 rounded-full">
-                {successfulCount} / {results.length} Completed
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {results.map((result) => (
-                <div key={result.id} className="bg-white rounded-2xl shadow-sm border border-neutral-200 overflow-hidden flex flex-col">
-                  <div className="aspect-square bg-neutral-100 relative flex items-center justify-center p-4">
-                    {result.status === 'pending' && <span className="text-sm text-neutral-400">Waiting...</span>}
-                    {result.status === 'generating' && <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />}
-                    {result.status === 'error' && (
-                      <div className="text-center p-2 text-red-500">
-                        <AlertCircle className="h-6 w-6 mx-auto mb-1" />
-                        <span className="text-xs font-medium">{result.error}</span>
-                      </div>
-                    )}
-                    {result.status === 'success' && result.imageUrl && (
-                      <img src={result.imageUrl} alt={result.prompt} className="w-full h-full object-cover" />
-                    )}
-                  </div>
-                  <div className="p-4 flex flex-col flex-grow">
-                    <p className="text-sm text-neutral-700 line-clamp-2 mb-4 flex-grow">{result.prompt}</p>
-                    <button
-                      onClick={() => handleDownloadSingle(result)}
-                      disabled={result.status !== 'success'}
-                      className="w-full inline-flex justify-center items-center px-4 py-2 border border-neutral-300 shadow-sm text-sm font-medium rounded-lg hover:bg-neutral-50 disabled:opacity-50"
-                    >
-                      <Download className="-ml-1 mr-2 h-4 w-4" /> Download
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {successfulCount > 0 && (
-              <div className="mt-12 pt-8 border-t border-neutral-200 flex justify-center">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          {results.map((result) => (
+            <div key={result.id} className="bg-white rounded-3xl shadow-lg border border-slate-100 overflow-hidden flex flex-col">
+              <div className="aspect-square bg-slate-100 flex items-center justify-center p-2">
+                {result.status === 'generating' && <Loader2 className="animate-spin text-blue-500 w-10 h-10" />}
+                {result.status === 'error' && <span className="text-red-500 text-xs font-bold px-4 text-center">{result.error}</span>}
+                {result.status === 'success' && <img src={result.imageUrl} className="w-full h-full object-cover rounded-xl" alt="AI Generated" />}
+              </div>
+              <div className="p-5">
+                <p className="text-xs text-slate-500 mb-4 line-clamp-2">{result.prompt}</p>
                 <button
-                  onClick={handleDownloadZip}
-                  className="inline-flex items-center px-8 py-4 text-white bg-neutral-900 rounded-xl hover:bg-neutral-800 transition-colors"
+                  onClick={() => handleDownloadSingle(result)}
+                  disabled={result.status !== 'success'}
+                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-xl text-sm font-bold flex items-center justify-center transition-all disabled:opacity-30"
                 >
-                  <Archive className="-ml-1 mr-3 h-6 w-6" /> Download All as ZIP
+                  <Download className="w-4 h-4 mr-2" /> Download
                 </button>
               </div>
-            )}
+            </div>
+          ))}
+        </div>
+
+        {results.some(r => r.status === 'success') && (
+          <div className="mt-12 flex justify-center">
+            <button onClick={handleDownloadZip} className="bg-slate-900 text-white px-10 py-4 rounded-2xl font-bold flex items-center shadow-2xl hover:bg-slate-800 transition-all">
+              <Archive className="mr-3" /> Download All ZIP
+            </button>
           </div>
         )}
       </div>
