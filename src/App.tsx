@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import JSZip from 'jszip';
-import { Loader2, Download, Image as ImageIcon, Archive, RefreshCw } from 'lucide-react';
+import { Loader2, Download, Image as ImageIcon, Archive, AlertTriangle } from 'lucide-react';
 
 interface GenerationResult {
   id: string;
@@ -15,29 +15,7 @@ export default function App() {
   const [results, setResults] = useState<GenerationResult[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const fetchImageWithRetry = async (prompt: string, attempt: number = 0): Promise<string> => {
-    const seed = Math.floor(Math.random() * 1000000);
-    const encodedPrompt = encodeURIComponent(prompt);
-    
-    // Switch models based on attempts to find an available server
-    const models = ['flux', 'turbo', 'dreamshaper'];
-    const model = models[attempt % models.length];
-    
-    const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&seed=${seed}&nologo=true&model=${model}`;
-
-    const response = await fetch(url, { cache: 'no-store' });
-    if (!response.ok) {
-      if (attempt < 2) return fetchImageWithRetry(prompt, attempt + 1);
-      throw new Error('All servers busy');
-    }
-
-    const blob = await response.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(blob);
-    });
-  };
+  const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
   const handleGenerate = async () => {
     const lines = promptsText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
@@ -48,66 +26,98 @@ export default function App() {
 
     for (let i = 0; i < lines.length; i++) {
       const prompt = lines[i];
-      const id = `${Date.now()}-${i}`;
+      const resultId = `${Date.now()}-${i}`;
       
       setResults(prev => prev.map(r => r.prompt === prompt ? { ...r, status: 'generating' } : r));
 
       try {
-        const imgData = await fetchImageWithRetry(prompt);
-        setResults(prev => prev.map(r => r.prompt === prompt ? { ...r, status: 'success', imageUrl: imgData } : r));
+        // Anti-Ban Delay: Taake server block na kare (3 seconds wait)
+        if (i > 0) await delay(3000);
+
+        const seed = Math.floor(Math.random() * 1000000);
+        // Using the most stable production endpoint
+        const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt)}?width=1024&height=1024&seed=${seed}&model=searchgpt&nologo=true`;
+
+        // Pehle check karte hain image load ho rahi hai ya nahi
+        const imgCheck = new Image();
+        imgCheck.src = imageUrl;
+        
+        await new Promise((resolve, reject) => {
+          imgCheck.onload = resolve;
+          imgCheck.onerror = reject;
+          // Timeout after 15 seconds
+          setTimeout(() => reject(new Error("Timeout")), 15000);
+        });
+
+        setResults(prev => prev.map(r => r.prompt === prompt ? { ...r, status: 'success', imageUrl: imageUrl } : r));
       } catch (e) {
-        setResults(prev => prev.map(r => r.prompt === prompt ? { ...r, status: 'error', error: 'Server Overload' } : r));
+        setResults(prev => prev.map(r => r.prompt === prompt ? { ...r, status: 'error', error: 'Connection weak. Try again.' } : r));
       }
     }
     setIsGenerating(false);
   };
 
-  return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-6 font-sans">
-      <div className="max-w-4xl mx-auto">
-        <header className="text-center mb-12">
-          <h1 className="text-5xl font-black mb-2 tracking-tighter bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent uppercase">Nano Banana Pro</h1>
-          <p className="text-neutral-500 text-sm font-mono">STABLE BULK GENERATOR V4.0</p>
-        </header>
+  const handleDownloadZip = async () => {
+    const zip = new JSZip();
+    const successful = results.filter(r => r.status === 'success' && r.imageUrl);
+    
+    for (let i = 0; i < successful.length; i++) {
+      const response = await fetch(successful[i].imageUrl!);
+      const blob = await response.blob();
+      zip.file(`image_${i+1}.jpg`, blob);
+    }
 
-        <div className="bg-[#141414] p-8 rounded-[2rem] border border-neutral-800 shadow-2xl mb-12">
+    const content = await zip.generateAsync({ type: 'blob' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(content);
+    a.download = 'ai_images_bulk.zip';
+    a.click();
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-white p-4 md:p-10">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-bold text-blue-400 mb-2 underline decoration-white italic">AI BULK GENERATOR V5</h1>
+          <p className="text-slate-400">Stable Professional Build</p>
+        </div>
+
+        <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-2xl mb-10">
           <textarea
-            className="w-full bg-[#0a0a0a] rounded-2xl p-6 text-lg outline-none border border-neutral-800 focus:border-blue-500 transition-all min-h-[150px]"
-            placeholder="Describe your vision (one per line)..."
+            className="w-full h-32 bg-slate-900 rounded-2xl p-4 text-white border border-slate-700 focus:border-blue-500 outline-none"
+            placeholder="One prompt per line..."
             value={promptsText}
             onChange={(e) => setPromptsText(e.target.value)}
           />
           <button
             onClick={handleGenerate}
             disabled={isGenerating || !promptsText.trim()}
-            className="w-full mt-6 bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black text-xl flex items-center justify-center transition-all disabled:opacity-20 uppercase tracking-widest"
+            className="w-full mt-4 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold transition-all disabled:opacity-50"
           >
-            {isGenerating ? <Loader2 className="animate-spin mr-3 w-6 h-6" /> : <ImageIcon className="mr-3 w-6 h-6" />}
-            Generate
+            {isGenerating ? <Loader2 className="animate-spin mx-auto" /> : "GENERATE ALL"}
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {results.map((res) => (
-            <div key={res.id} className="bg-[#141414] rounded-[1.5rem] border border-neutral-800 overflow-hidden group">
-              <div className="aspect-square bg-[#0a0a0a] flex items-center justify-center relative">
-                {res.status === 'generating' && <Loader2 className="animate-spin text-blue-500 w-12 h-12" />}
-                {res.status === 'error' && <div className="text-center p-4"><RefreshCw className="w-8 h-8 text-red-500 mx-auto mb-2 opacity-50" /><span className="text-[10px] font-bold text-red-500 uppercase">{res.error}</span></div>}
+            <div key={res.id} className="bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 p-2">
+              <div className="aspect-square bg-slate-900 rounded-xl flex items-center justify-center relative overflow-hidden">
+                {res.status === 'generating' && <Loader2 className="animate-spin text-blue-500 w-10 h-10" />}
+                {res.status === 'error' && <AlertTriangle className="text-red-500 w-8 h-8" />}
                 {res.status === 'success' && <img src={res.imageUrl} className="w-full h-full object-cover" alt="AI result" />}
               </div>
-              <div className="p-5 flex flex-col gap-4">
-                <p className="text-[10px] text-neutral-500 uppercase font-bold truncate">{res.prompt}</p>
-                <button
-                  onClick={() => { const a = document.createElement('a'); a.href = res.imageUrl!; a.download = 'nano_banana.png'; a.click(); }}
-                  disabled={res.status !== 'success'}
-                  className="bg-neutral-800 hover:bg-neutral-700 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-10"
-                >
-                  Download PNG
-                </button>
-              </div>
+              <p className="text-[10px] mt-2 text-slate-400 truncate px-2">{res.prompt}</p>
             </div>
           ))}
         </div>
+
+        {results.some(r => r.status === 'success') && (
+          <div className="mt-10 flex justify-center">
+            <button onClick={handleDownloadZip} className="bg-white text-black px-10 py-3 rounded-xl font-bold flex items-center hover:bg-slate-200">
+              <Archive className="mr-2" /> DOWNLOAD ZIP
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
